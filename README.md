@@ -13,7 +13,7 @@ rather than the DevOps control plane itself.
 
 ```hcl
 module "devops" {
-  source = "github.com/cybercapybara/terraform-azurerm-devops"
+  source = "github.com/moveeeax/terraform-azurerm-devops"
 
   name                 = "platform"
   location             = "eastus"
