@@ -13,8 +13,28 @@ resource "azurerm_storage_account" "this" {
   account_replication_type = var.account_replication_type
   min_tls_version          = "TLS1_2"
 
+  # The provider defaults this to true, which lets anyone with write access
+  # to the account flip a container (or an individual blob) to anonymous
+  # public read. An account holding Terraform state must never allow that,
+  # so the capability is switched off at the account level.
+  allow_nested_items_to_be_public = false
+
+  https_traffic_only_enabled    = true
+  public_network_access_enabled = var.public_network_access_enabled
+
   blob_properties {
     versioning_enabled = true
+
+    # Versioning alone does not protect against a deleted blob or a deleted
+    # container. Soft delete is what makes an accidental `terraform destroy`
+    # or a fat-fingered container delete recoverable.
+    delete_retention_policy {
+      days = var.blob_soft_delete_retention_days
+    }
+
+    container_delete_retention_policy {
+      days = var.blob_soft_delete_retention_days
+    }
   }
 
   tags = var.tags
