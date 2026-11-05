@@ -9,9 +9,9 @@ terraform {
     azurerm = {
       source = "hashicorp/azurerm"
       # azurerm_storage_container.storage_account_id was only added in
-      # 4.9.0; on anything older this module fails to validate. The upper
-      # bound guards consumers against the next major provider release.
-      version = ">= 4.9, < 5.0"
+      # 4.9.0; on anything older this module fails to validate. Ceiling:
+      # validated and tested on 5.x; 6.0 has not been vetted.
+      version = ">= 4.9, < 6.0"
     }
   }
 }
