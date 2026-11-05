@@ -32,7 +32,7 @@ into state or into a plan output.
 
 ```hcl
 module "devops" {
-  source = "github.com/moveeeax/terraform-azurerm-devops"
+  source = "github.com/moveeeax/terraform-azurerm-devops?ref=v1.0.0"
 
   name                 = "platform"
   location             = "eastus"
@@ -52,10 +52,11 @@ A runnable example lives in [`examples/basic`](examples/basic).
 | Name      | Version          |
 |-----------|------------------|
 | terraform | >= 1.5           |
-| azurerm   | >= 4.9, < 5.0    |
+| azurerm   | >= 4.9, < 6.0    |
 
 `azurerm_storage_container.storage_account_id` only exists from azurerm
-4.9.0 onwards, so older provider versions cannot plan this module at all.
+4.9.0 onwards, so older provider versions cannot plan this module at all. CI
+runs against the latest 5.x release; 6.x is excluded until it has been tested.
 
 ## Inputs
 
