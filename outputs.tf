@@ -33,3 +33,8 @@ output "backend_config_hcl" {
     use_azuread_auth     = ${local.backend_config.use_azuread_auth}
   EOT
 }
+
+output "state_container_resource_manager_id" {
+  description = "ARM resource ID of the state container, the scope of the state_writer/state_reader role assignments. Use it to grant further roles on the container."
+  value       = local.state_container_scope
+}

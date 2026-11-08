@@ -23,6 +23,9 @@ file serving:
   overwritten, deleted or destroyed state file is recoverable.
 - `public_network_access_enabled` is exposed as a variable so the account can
   be reached exclusively over a private endpoint.
+- State access can be granted to Entra ID principals at container scope, and
+  shared key access can be switched off once nothing relies on it (opt-in,
+  see below).
 
 The module takes no credentials of any kind as input — no PAT, no service
 connection secret, no storage access key — so there is nothing here to leak
@@ -76,12 +79,57 @@ terraform init -backend-config=backend.hcl -backend-config="key=app.tfstate"
 `key` is not part of the output because it names a single state file and
 differs per root module. The outputs contain no credentials.
 
-`use_azuread_auth` comes from `backend_use_azuread_auth` (default `false`).
+`use_azuread_auth` comes from `backend_use_azuread_auth` (default `false`), and
+is always `true` when `shared_access_key_enabled = false`.
 With `false` the backend reads the storage account key using the caller's ARM
 credentials. Set it to `true` when the identity running Terraform holds
 Storage Blob Data Contributor (or Reader, for plan-only jobs) on the state
 container; that avoids handling account keys at all. The module does not
 write the file itself, so it needs no provider besides `azurerm`.
+
+## State access through Entra ID
+
+`state_writer_principal_ids` and `state_reader_principal_ids` grant Storage
+Blob Data Contributor and Storage Blob Data Reader on the state container
+only, so a pipeline identity can read and write state without the account
+key and without access to anything else in the account:
+
+```hcl
+module "devops" {
+  source = "github.com/moveeeax/terraform-azurerm-devops?ref=v1.0.0"
+
+  name                 = "platform"
+  location             = "eastus"
+  storage_account_name = "platformdevopssa01"
+
+  # Keys are label => object ID; labels must be static, object IDs may be
+  # unknown until apply.
+  state_writer_principal_ids = {
+    deploy = azurerm_user_assigned_identity.deploy.principal_id
+  }
+  state_reader_principal_ids = {
+    plan = azurerm_user_assigned_identity.plan.principal_id
+  }
+
+  backend_use_azuread_auth = true
+}
+```
+
+Role assignments are additive and safe to add to an existing deployment.
+Azure can take a few minutes to propagate a new assignment, so the first
+`init` against the backend may fail with 403 right after apply.
+
+`shared_access_key_enabled` defaults to `true`, the provider default, because
+switching it off on an existing account immediately breaks every backend and
+pipeline that still authenticates with the key. Recommended once nothing uses
+the key any more:
+
+1. Grant every pipeline and operator a role above and move their backends to
+   `use_azuread_auth = true`.
+2. Set `storage_use_azuread = true` in the `azurerm` provider block of the
+   configuration that calls this module; without shared keys the provider
+   itself must reach the blob data plane through Entra ID.
+3. Set `shared_access_key_enabled = false`.
 
 ## Requirements
 
@@ -105,7 +153,10 @@ runs against the latest 5.x release; 6.x is excluded until it has been tested.
 | `account_replication_type`        | Replication type. One of `LRS`, `ZRS`, `GRS`, `RAGRS`, `GZRS`, `RAGZRS`.       | `string`      | `"LRS"`      |    no    |
 | `public_network_access_enabled`   | Whether the account is reachable from the public internet.                     | `bool`        | `true`       |    no    |
 | `blob_soft_delete_retention_days` | Days deleted blobs and containers stay recoverable (1-365).                    | `number`      | `7`          |    no    |
-| `backend_use_azuread_auth`        | `use_azuread_auth` value in the backend outputs; affects no resource.          | `bool`        | `false`      |    no    |
+| `shared_access_key_enabled`       | Whether the account accepts access-key auth. See the Entra ID section.          | `bool`        | `true`       |    no    |
+| `state_writer_principal_ids`      | Label => object ID granted Storage Blob Data Contributor on the container.     | `map(string)` | `{}`         |    no    |
+| `state_reader_principal_ids`      | Label => object ID granted Storage Blob Data Reader on the container.          | `map(string)` | `{}`         |    no    |
+| `backend_use_azuread_auth`        | `use_azuread_auth` value in the backend outputs; forced `true` without shared keys. | `bool`        | `false`      |    no    |
 | `tags`                            | Map of tags applied to all resources.                                          | `map(string)` | `{}`         |    no    |
 
 ## Outputs
@@ -118,6 +169,7 @@ runs against the latest 5.x release; 6.x is excluded until it has been tested.
 | `state_container_name` | Name of the state blob container.      |
 | `backend_config`       | Map of `backend "azurerm"` settings (no `key`, no credentials). |
 | `backend_config_hcl`   | `backend_config` rendered as a `backend.hcl` partial config.  |
+| `state_container_resource_manager_id` | ARM ID of the state container, the scope of the role grants. |
 
 ## Tests
 

@@ -168,3 +168,98 @@ run "backend_config_can_select_entra_id_auth" {
     error_message = "backend_config_hcl must follow backend_use_azuread_auth."
   }
 }
+
+run "defaults_keep_shared_keys_and_grant_nothing" {
+  command = plan
+
+  assert {
+    condition     = azurerm_storage_account.this.shared_access_key_enabled == true
+    error_message = "Shared key access must stay enabled by default; disabling it breaks key-based backends on upgrade."
+  }
+
+  assert {
+    condition     = length(azurerm_role_assignment.state_writer) == 0 && length(azurerm_role_assignment.state_reader) == 0
+    error_message = "No role assignments may be planned unless principals are supplied."
+  }
+}
+
+run "grants_container_scoped_entra_id_roles" {
+  variables {
+    state_writer_principal_ids = {
+      pipeline = "11111111-1111-1111-1111-111111111111"
+    }
+    state_reader_principal_ids = {
+      plan_only = "22222222-2222-2222-2222-222222222222"
+    }
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.state_writer["pipeline"].role_definition_name == "Storage Blob Data Contributor"
+    error_message = "State writers must get Storage Blob Data Contributor."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.state_reader["plan_only"].role_definition_name == "Storage Blob Data Reader"
+    error_message = "State readers must get Storage Blob Data Reader."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.state_writer["pipeline"].scope == "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-devops-rg/providers/Microsoft.Storage/storageAccounts/mockstate01/blobServices/default/containers/tfstate"
+    error_message = "Role assignments must be scoped to the state container, not the account."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.state_reader["plan_only"].scope == output.state_container_resource_manager_id
+    error_message = "state_container_resource_manager_id must equal the role assignment scope."
+  }
+
+  assert {
+    condition     = output.backend_config.use_azuread_auth == false
+    error_message = "Granting roles alone must not change the backend auth mode while shared keys are enabled."
+  }
+}
+
+run "disabling_shared_keys_forces_entra_id_backend_auth" {
+  variables {
+    shared_access_key_enabled = false
+  }
+
+  assert {
+    condition     = azurerm_storage_account.this.shared_access_key_enabled == false
+    error_message = "shared_access_key_enabled = false must reach the storage account."
+  }
+
+  assert {
+    condition     = output.backend_config.use_azuread_auth == true
+    error_message = "Without shared keys the backend config must use Entra ID auth."
+  }
+
+  assert {
+    condition     = strcontains(output.backend_config_hcl, "use_azuread_auth     = true\n")
+    error_message = "backend_config_hcl must use Entra ID auth when shared keys are disabled."
+  }
+}
+
+run "rejects_non_guid_writer_principal" {
+  command = plan
+
+  variables {
+    state_writer_principal_ids = {
+      pipeline = "my-service-principal"
+    }
+  }
+
+  expect_failures = [var.state_writer_principal_ids]
+}
+
+run "rejects_non_guid_reader_principal" {
+  command = plan
+
+  variables {
+    state_reader_principal_ids = {
+      plan_only = "user@example.com"
+    }
+  }
+
+  expect_failures = [var.state_reader_principal_ids]
+}

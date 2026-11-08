@@ -67,8 +67,40 @@ variable "blob_soft_delete_retention_days" {
   }
 }
 
+variable "shared_access_key_enabled" {
+  description = "Whether the state storage account accepts requests authorised with the account access key. Defaults to true (the provider default) because disabling it breaks every backend and pipeline that still uses the key. Set to false once all callers use Entra ID (use_azuread_auth = true) and the provider managing this module sets storage_use_azuread = true."
+  type        = bool
+  default     = true
+}
+
+variable "state_writer_principal_ids" {
+  description = "Map of static label => Entra ID object ID of a principal (user, group, service principal or managed identity) granted Storage Blob Data Contributor on the state container. Keyed by label so object IDs that are only known after apply still work in for_each."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for k, v in var.state_writer_principal_ids : can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", v))
+    ])
+    error_message = "Every value in state_writer_principal_ids must be an Entra ID object ID (a GUID)."
+  }
+}
+
+variable "state_reader_principal_ids" {
+  description = "Map of static label => Entra ID object ID of a principal granted Storage Blob Data Reader on the state container, e.g. for plan-only pipelines."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for k, v in var.state_reader_principal_ids : can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", v))
+    ])
+    error_message = "Every value in state_reader_principal_ids must be an Entra ID object ID (a GUID)."
+  }
+}
+
 variable "backend_use_azuread_auth" {
-  description = "Value of use_azuread_auth in the backend_config and backend_config_hcl outputs. Leave false when the backend authenticates with the storage account key (the azurerm backend fetches it with your ARM credentials); set to true when the identity running Terraform holds a Storage Blob Data role on the state container. Only affects the outputs, not any resource."
+  description = "Value of use_azuread_auth in the backend_config and backend_config_hcl outputs. Ignored (always true) when shared_access_key_enabled is false. Leave false when the backend authenticates with the storage account key (the azurerm backend fetches it with your ARM credentials); set to true when the identity running Terraform holds a Storage Blob Data role on the state container. Only affects the outputs, not any resource."
   type        = bool
   default     = false
 }
