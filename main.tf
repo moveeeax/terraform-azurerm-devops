@@ -45,3 +45,16 @@ resource "azurerm_storage_container" "state" {
   storage_account_id    = azurerm_storage_account.this.id
   container_access_type = "private"
 }
+
+locals {
+  # Settings for a `backend "azurerm"` block pointing at the state container.
+  # `key` is deliberately absent: it names one state file, so each root module
+  # sets its own (e.g. -backend-config="key=app.tfstate").
+  backend_config = {
+    subscription_id      = split("/", azurerm_storage_account.this.id)[2]
+    resource_group_name  = azurerm_resource_group.this.name
+    storage_account_name = azurerm_storage_account.this.name
+    container_name       = azurerm_storage_container.state.name
+    use_azuread_auth     = var.backend_use_azuread_auth
+  }
+}

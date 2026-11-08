@@ -128,3 +128,43 @@ run "rejects_empty_location" {
 
   expect_failures = [var.location]
 }
+
+run "backend_config_points_at_the_state_container" {
+  assert {
+    condition = output.backend_config == {
+      subscription_id      = "00000000-0000-0000-0000-000000000000"
+      resource_group_name  = "platform-devops-rg"
+      storage_account_name = "platformdevopssa01"
+      container_name       = "tfstate"
+      use_azuread_auth     = false
+    }
+    error_message = "backend_config must name the module's subscription, resource group, account and container, with key-based auth by default."
+  }
+
+  assert {
+    condition     = strcontains(output.backend_config_hcl, "container_name       = \"tfstate\"\n")
+    error_message = "backend_config_hcl must render the container name as an HCL string."
+  }
+
+  assert {
+    condition     = strcontains(output.backend_config_hcl, "use_azuread_auth     = false\n")
+    error_message = "backend_config_hcl must render use_azuread_auth as a bare boolean."
+  }
+}
+
+run "backend_config_can_select_entra_id_auth" {
+  variables {
+    backend_use_azuread_auth = true
+    state_container_name     = "pipeline-state"
+  }
+
+  assert {
+    condition     = output.backend_config.use_azuread_auth == true && output.backend_config.container_name == "pipeline-state"
+    error_message = "backend_config must follow backend_use_azuread_auth and state_container_name."
+  }
+
+  assert {
+    condition     = strcontains(output.backend_config_hcl, "use_azuread_auth     = true\n")
+    error_message = "backend_config_hcl must follow backend_use_azuread_auth."
+  }
+}

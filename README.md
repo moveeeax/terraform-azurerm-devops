@@ -47,6 +47,42 @@ module "devops" {
 
 A runnable example lives in [`examples/basic`](examples/basic).
 
+## Pointing other root modules at the state
+
+After apply, the `backend_config` output holds the settings a
+`backend "azurerm"` block needs, and `backend_config_hcl` renders them as a
+partial backend configuration file:
+
+```sh
+terraform output -raw backend_config_hcl > backend.hcl
+```
+
+```hcl
+# backend.hcl
+subscription_id      = "00000000-0000-0000-0000-000000000000"
+resource_group_name  = "platform-devops-rg"
+storage_account_name = "platformdevopssa01"
+container_name       = "tfstate"
+use_azuread_auth     = false
+```
+
+Each consuming root module declares an empty `backend "azurerm" {}` block and
+supplies its own state key:
+
+```sh
+terraform init -backend-config=backend.hcl -backend-config="key=app.tfstate"
+```
+
+`key` is not part of the output because it names a single state file and
+differs per root module. The outputs contain no credentials.
+
+`use_azuread_auth` comes from `backend_use_azuread_auth` (default `false`).
+With `false` the backend reads the storage account key using the caller's ARM
+credentials. Set it to `true` when the identity running Terraform holds
+Storage Blob Data Contributor (or Reader, for plan-only jobs) on the state
+container; that avoids handling account keys at all. The module does not
+write the file itself, so it needs no provider besides `azurerm`.
+
 ## Requirements
 
 | Name      | Version          |
@@ -69,6 +105,7 @@ runs against the latest 5.x release; 6.x is excluded until it has been tested.
 | `account_replication_type`        | Replication type. One of `LRS`, `ZRS`, `GRS`, `RAGRS`, `GZRS`, `RAGZRS`.       | `string`      | `"LRS"`      |    no    |
 | `public_network_access_enabled`   | Whether the account is reachable from the public internet.                     | `bool`        | `true`       |    no    |
 | `blob_soft_delete_retention_days` | Days deleted blobs and containers stay recoverable (1-365).                    | `number`      | `7`          |    no    |
+| `backend_use_azuread_auth`        | `use_azuread_auth` value in the backend outputs; affects no resource.          | `bool`        | `false`      |    no    |
 | `tags`                            | Map of tags applied to all resources.                                          | `map(string)` | `{}`         |    no    |
 
 ## Outputs
@@ -79,6 +116,8 @@ runs against the latest 5.x release; 6.x is excluded until it has been tested.
 | `storage_account_id`   | ID of the state storage account.       |
 | `storage_account_name` | Name of the state storage account.     |
 | `state_container_name` | Name of the state blob container.      |
+| `backend_config`       | Map of `backend "azurerm"` settings (no `key`, no credentials). |
+| `backend_config_hcl`   | `backend_config` rendered as a `backend.hcl` partial config.  |
 
 ## Tests
 

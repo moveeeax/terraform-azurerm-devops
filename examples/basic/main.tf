@@ -33,3 +33,8 @@ output "storage_account_id" {
 output "state_container_name" {
   value = module.devops.state_container_name
 }
+
+# terraform output -raw backend_hcl > backend.hcl
+output "backend_hcl" {
+  value = module.devops.backend_config_hcl
+}
