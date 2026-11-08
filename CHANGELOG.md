@@ -15,6 +15,14 @@ All notable changes to this module are documented here. The format follows
   configuration file for `terraform init -backend-config=backend.hcl`.
 - `backend_use_azuread_auth` input (default `false`) sets `use_azuread_auth` in
   those outputs. It changes no resource.
+- `state_writer_principal_ids` and `state_reader_principal_ids` inputs (maps of
+  label to Entra ID object ID, default `{}`) create Storage Blob Data
+  Contributor and Storage Blob Data Reader role assignments scoped to the state
+  container. Values must be GUIDs.
+- `shared_access_key_enabled` input, default `true` (the provider default, so
+  existing accounts plan unchanged). When `false`, the backend outputs always
+  set `use_azuread_auth = true`.
+- `state_container_resource_manager_id` output: ARM ID of the state container.
 
 ## [1.1.0] - 2026-11-05
 

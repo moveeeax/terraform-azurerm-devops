@@ -22,6 +22,11 @@ resource "azurerm_storage_account" "this" {
   https_traffic_only_enabled    = true
   public_network_access_enabled = var.public_network_access_enabled
 
+  # true is the provider default, so existing accounts plan unchanged. Turning
+  # it off breaks every backend and pipeline still authenticating with the
+  # account key, which is why it is opt-in.
+  shared_access_key_enabled = var.shared_access_key_enabled
+
   blob_properties {
     versioning_enabled = true
 
@@ -47,6 +52,11 @@ resource "azurerm_storage_container" "state" {
 }
 
 locals {
+  # Role assignments target the container, not the account, so a pipeline
+  # identity can reach the state and nothing else stored here. Built from the
+  # account ID so the scope is always the ARM form of the container ID.
+  state_container_scope = "${azurerm_storage_account.this.id}/blobServices/default/containers/${azurerm_storage_container.state.name}"
+
   # Settings for a `backend "azurerm"` block pointing at the state container.
   # `key` is deliberately absent: it names one state file, so each root module
   # sets its own (e.g. -backend-config="key=app.tfstate").
@@ -55,6 +65,23 @@ locals {
     resource_group_name  = azurerm_resource_group.this.name
     storage_account_name = azurerm_storage_account.this.name
     container_name       = azurerm_storage_container.state.name
-    use_azuread_auth     = var.backend_use_azuread_auth
+    # Without shared keys the backend can only authenticate through Entra ID.
+    use_azuread_auth = var.backend_use_azuread_auth || !var.shared_access_key_enabled
   }
+}
+
+resource "azurerm_role_assignment" "state_writer" {
+  for_each = var.state_writer_principal_ids
+
+  scope                = local.state_container_scope
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = each.value
+}
+
+resource "azurerm_role_assignment" "state_reader" {
+  for_each = var.state_reader_principal_ids
+
+  scope                = local.state_container_scope
+  role_definition_name = "Storage Blob Data Reader"
+  principal_id         = each.value
 }
