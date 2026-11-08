@@ -67,6 +67,12 @@ variable "blob_soft_delete_retention_days" {
   }
 }
 
+variable "backend_use_azuread_auth" {
+  description = "Value of use_azuread_auth in the backend_config and backend_config_hcl outputs. Leave false when the backend authenticates with the storage account key (the azurerm backend fetches it with your ARM credentials); set to true when the identity running Terraform holds a Storage Blob Data role on the state container. Only affects the outputs, not any resource."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Map of tags applied to all resources."
   type        = map(string)
